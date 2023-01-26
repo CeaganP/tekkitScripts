@@ -1,27 +1,6 @@
 C:\Users\Ceagan\AppData\Roaming\.technic\modpacks\tekkit\mods\ComputerCraft\lua\rom\programs
 
-co = coroutine.create(function ()
-  while input = nil do 
-    redstone.setOutput("left", true)
-    sleep(1)
-    redstone.setOutput("left", false)
-    sleep(1)
-  end
-end)
 
-coroutine.resume(co)  
-
---
-function leftFlicker()
-  while not redstone.getInput("back") do
-    redstone.setOutput("left", true)
-	sleep(1)
-    redstone.setOutput("left", false)
-	sleep(1)
-  end
-end
-
-parallel.waitForAll(leftFlicker)
 
 --http://www.computercraft.info/forums2/index.php?/topic/23184-sensorlog-logging-nearby-players-printing-as-a-table/
 --SENSORS
@@ -32,33 +11,16 @@ for value in pairs(sensor) do
   print(value)
 end
 
---https://www.computercraft.info/wiki/Startup
---https://computercraft.info/wiki/Turtle_(API)
---https://www.computercraft.info/wiki/Clear
---wireless turtle
-rednet.open("right", 50)
-term.clear()
-while true do
-  term.setCursorPos(1,1)  
-  print("awaiting code to execute...")
-  local id, msg = rednet.receive() 
-  term.clear()
-  print("wireless transmission received...")
-  local f,err = loadstring(msg)
-  if err==nil then  print("function assigned...")  
-  else print(err) end
-  local v,err = pcall(f)
-  if not v then  print("code failed to compile...", err)  end
-end
+
 
 --used with GPS to navigate to specified location
 --drive
 rednet.open("top", 50)
-
+gps.locate(3,true)
 drive=[[
 local currentLoc=vector.new(gps.locate(3,true))
 
-while currentLoc.x~=loc.x do
+while not currentLoc.x==loc.x do
   rednet.broadcast("aligning x axis")
 
   local xdiff=math.abs(currentLoc.x-loc.x)
@@ -200,9 +162,9 @@ rednet.open("top", 50)
 
 tester = [[local isMoving=true
 while isMoving do
-  local id,command=rednet.receive(0.3)
+  local id,command=rednet.receive(3)
   if not command==nil then
-	rednet.broadcast("true")
+    rednet.broadcast("true")
     isMoving=false
     break
   elseif command==nil then
@@ -218,48 +180,150 @@ print("response: ", response)
 
 
 
---constantly display commands
---https://stackoverflow.com/questions/21075743/compare-string-if-theres-at-most-one-wrong-character-in-lua
---cDisplay
-function compstr(w1, w2)
-    if w1:len() ~= w2:len() then
-        return false
-    end
-    for i = 1, w1:len() do
-        if w1:sub(i, i) ~= w2:sub(i, i) then
-            return w1:sub(i + 1) == w2:sub(i + 1)
-        end
-    end
-    return true
+--test monitor logging 
+rednet.open("right", 50)
+
+tester = [[local log=false
+local isMoving=true
+if isMoving then
+  rednet.broadcast("systems are a go")
 end
+rednet.broadcast("finished communications")
+]]
+rednet.broadcast(tester)
+local id,response=rednet.receive()
+print("response: ", response)
 
-local screen = peripheral.wrap("left")
-screen.clear()
-screen.setCursorPos(1,1)
-screen.write("Turtle Update Log")
-local x,y=1,2
-screen.setCursorPos(x,y)
 
-local prevMsg={}
+
+
+
+
+--xox	xox
+--xxo	oxo
+--oxx	
+--to host x y z
+gps host -4020 89 -3499
+gps host -4019 88 -3497
+gps host -4021 88 -3497
+shell.run("gps", "host", x, y, z)
+shell.run("gps", "host", -4020, 88, 3499)
+shell.run("gps", "host", -4019, 88, -3497)
+shell.run("gps", "host", -4021, 88, -3497)
+
+local x = -9395
+local y = 95
+local z = -9640 
+shell.run("gps", "host", x, y, z)
+
+
+-9396, 96, -9642 
+-9397, 95, -9640 
+-9395, 95, -9640
+
+local loc=vector.new(gps.locate(3,true))
+
+
+
+
+
+
+
+
+
+
+
+
+--used with GPS to navigate to specified location
+--drive
+
+--direction of 0 is forward 
+--direction of 1 is right 
+--direction of 2 is back 
+--direction of 3 is left 
 
 rednet.open("top", 50)
-while true do
-  local id,msg=rednet.receive()
-  if prevMsg[id]==nil then
-    screen.write(msg)
-	y=y+1
-	screen.setCursorPos(x,y)
-	table.insert(prevMsg, id, msg) 
+
+drive=[[
+local loc=vector.new(gps.locate(3,true))
+local startLoc = loc
+local dir = 0 
+
+function align()
+  turtle.forward()
+  local liveLoc = vector.new(gps.locate(3,true))
+  
+  local posDiffX = loc.x - liveLoc.x
+  local posDiffZ = loc.z - liveLoc.z    
+	
+  if posDiffX < 0 then
+    dir = 3  
+  elseif posDiffX > 0 then
+    dir = 1
   end
-  if not prevMsg[id]==msg then
-    screen.write(msg)
-    y=y+1
-    screen.setCursorPos(x,y)
-	prevMsg[id]=msg
+  
+  if posDiffZ < 0 then
+    dir = 0
+  elseif posDiffZ > 0 then
+    dir = 2
+  end  
+  turtle.back()
+end
+
+function right()
+  turtle.turnRight()
+  
+  local ndir = dir + 1  
+  if ndir == 4 then
+    return 0
+  end
+  return ndir
+end
+
+function left()
+  turtle.turnLeft()
+  return dir - 1;
+end
+
+function turn(newDir)
+  if not newDir == dir then
+    turn(right()) 
   end
 end
 
---gps triangulation
---loc
-edit startup
+function goToStart(location) 
+    if location.x < startLoc.x then 
+	  turn(1)
+	elseif location.x > startLoc.x then
+	  turn(3)
+	end
+	while not location.x == startLoc.x do 
+	  turtle.forward()
+	end
+	
+	if location.z < startLoc.z then
+	  turn(0)
+	elseif location.z > startLoc.z then
+	  turn(2) 
+	end
+	while not location.z == startLoc.z do 
+	  turtle.forward()
+	end
+end
+
+turtle.forward()
+turtle.forward()
+turtle.turnRight()
+turtle.forward()
+goToStart()
+]]
+
+rednet.broadcast(drive)
+
+
+
+local x = 180
+local y = 72
+local z = 258 
 shell.run("gps", "host", x, y, z)
+
